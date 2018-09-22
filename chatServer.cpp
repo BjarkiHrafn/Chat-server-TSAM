@@ -64,7 +64,7 @@ string provide_unique_id() {
 }
 
 int createSocket(int socketFileDescriptor) {
-    socketFileDescriptor = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK, 0);
+    socketFileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (socketFileDescriptor < 0) {
          error("ERROR opening socket");
     }
@@ -85,10 +85,12 @@ int selectFileDescritporSet(fd_set FDSet) {
     descriptors, waiting until one or more of the file descriptors become
     "ready" for some class of I/O operation (e.g., input possible).
     */
+    cout<< "Starting Select routine"<<endl;
     int numberOfFileDescriptors = select(FD_SETSIZE, &FDSet, NULL, NULL, NULL);
     if (numberOfFileDescriptors < 0) {
         error("Error selecting");
     }
+    cout<< "Recieved a message."<<endl;
     return numberOfFileDescriptors;
 }
 
@@ -144,18 +146,18 @@ int main(int argc, char *argv[]) {
     serverAddress.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
 
 
-    for(int i = portNumber1; i <= portNumber3; i++) {
+    /*for(int i = portNumber1; i <= portNumber3; i++) {
         serverAddress.sin_port = i;
         if(connect(socketFD1,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0)
             cout<<"Port: "<< i <<" is open"<<endl;
         else
             error("Port closed");
-    }
-    serverAddress.sin_port = portNumber1;
+    }*/
+    serverAddress.sin_port = htons(portNumber1);
     bindSuccess = bindSocket(socketFD1, serverAddress);
 
     // Initialize the set of active sockets.
-    socketFD1 = createSocket(socketFD1);
+    //socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
     if (listen (socketFD1, 5) < 0) {
@@ -164,12 +166,16 @@ int main(int argc, char *argv[]) {
     }else {
         cout<< "Listening..."<<endl;
     }
+    struct timeval* timeout;
+    timeout->tv_sec = 5;
 
     while(1) {
         // Block untill input arrives on one or more of the active sockets
         readFDSet = activeFDSet;
-        selectFileDescritporSet(readFDSet);
-
+        //selectFileDescritporSet(readFDSet);
+        int selectValue = select(FD_SETSIZE, &readFDSet, NULL, NULL, NULL);
+        if(selectValue < 0) error("Select");
+        cout<<"Done selecting :)"<<endl;
         for(int i = 0; i < FD_SETSIZE; i++) {
             // check if file descriptor is part of the set
             if(FD_ISSET(i, &readFDSet)) {

@@ -21,9 +21,9 @@ void error(const char *msg)
     perror(msg);
 }
 
-bool port_is_open(struct sockaddr_in address, int sockfd) {
+int port_is_open(struct sockaddr_in address, int sockfd) {
 
-    return connect(sockfd,(struct sockaddr *) &address,sizeof(address)) >= 0;
+    return connect(sockfd,(struct sockaddr *) &address,sizeof(address));
 }
 
 int main(int argc, char *argv[]){
@@ -43,9 +43,9 @@ int main(int argc, char *argv[]){
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);//copy from the server pointers address into the sockaddr_in variable
     int currentPort = 0;
 
-    serv_addr.sin_port = port;
+    serv_addr.sin_port = htons(port);
 
-    if(port_is_open(serv_addr, sockfd)){//call to the boolean function in line 24
+    if(port_is_open(serv_addr, sockfd) == 0){
         cout<<"Port "<<port<<": Open"<<endl;
     }else{
         cout<<"Port "<<port<<": Closed"<<endl;
