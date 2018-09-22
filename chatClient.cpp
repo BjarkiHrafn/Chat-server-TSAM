@@ -28,12 +28,10 @@ bool port_is_open(struct sockaddr_in address, int sockfd) {
 
 int main(int argc, char *argv[]){
 
-    int startPort = stoi(argv[2]);
-    int endPort = stoi(argv[3]);
-
     int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;
+    int port = stoi(argv[2]);
 
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0); // Open tcp Socket
@@ -45,16 +43,13 @@ int main(int argc, char *argv[]){
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);//copy from the server pointers address into the sockaddr_in variable
     int currentPort = 0;
 
-    currentPort = ports.at(i-startPort);
-    int port = ports.at(i-startPort);
-    serv_addr.sin_port = htons(port);
+    serv_addr.sin_port = port;
 
     if(port_is_open(serv_addr, sockfd)){//call to the boolean function in line 24
         cout<<"Port "<<port<<": Open"<<endl;
     }else{
         cout<<"Port "<<port<<": Closed"<<endl;
     }
-    wait_random_time();// call to the function in line 33
 
     close(sockfd);
 
