@@ -105,8 +105,9 @@ int read_from_client(int socketFD) {
 
 int main(int argc, char *argv[]) {
 
-    cout << provide_unique_id() << endl;
 
+    if(strcmp(argv[1], "ID") == 0)
+        cout << provide_unique_id() << endl;
     //select 3 consecutive ports for port knocking
     int portNumber1 = 50040;
     int portNumber2 = 50041;
@@ -136,13 +137,28 @@ int main(int argc, char *argv[]) {
     bzero((char *) &serverAddress, sizeof(serverAddress)); // initializes serverAddress to zeros.
     serverAddress.sin_family = AF_INET; // code for address family, this is always set to AF_INET
     serverAddress.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
-    serverAddress.sin_port = portNumber1;
 
+
+    for(int i = portNumber1; i <= portNumber3; i++) {
+        serverAddress.sin_port = i;
+        if(connect(socketFD1,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0)
+            cout<<"Port: "<< i <<" is open"<<endl;
+        else
+            error("Port closed");
+    }
+    serverAddress.sin_port = portNumber1;
     bindSuccess = bindSocket(socketFD1, serverAddress);
 
     // Initialize the set of active sockets.
+    socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
+    if (listen (socketFD1, 5) < 0) {
+    error ("listen");
+    exit (EXIT_FAILURE);
+    }else {
+        cout<< "Listening..."<<endl;
+    }
 
     while(1) {
         // Block untill input arrives on one or more of the active sockets
@@ -158,6 +174,8 @@ int main(int argc, char *argv[]) {
                     create a new socket with the same socket type protocol
                     and address family as the specified socket,
                     and allocate a new file descriptor for that socket.*/
+
+
                     newSocketFD1 = accept(socketFD1, (struct sockaddr *) &clientAddress, &clilen);
                     if(newSocketFD1 < 0) {
                         error("accept error");
