@@ -80,11 +80,16 @@ int bindSocket(int socketFileDescriptor, struct sockaddr_in serverAddress) {
 }
 
 int selectFileDescritporSet(fd_set FDSet) {
-    int selectDescriptor = select(FD_SETSIZE, &FDSet, NULL, NULL, NULL);
-    if (selectDescriptor < 0) {
+    /*
+    allow a program to monitor multiple file
+    descriptors, waiting until one or more of the file descriptors become
+    "ready" for some class of I/O operation (e.g., input possible).
+    */
+    int numberOfFileDescriptors = select(FD_SETSIZE, &FDSet, NULL, NULL, NULL);
+    if (numberOfFileDescriptors < 0) {
         error("Error selecting");
     }
-    return selectDescriptor;
+    return numberOfFileDescriptors;
 }
 
 int read_from_client(int socketFD) {
