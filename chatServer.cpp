@@ -72,11 +72,11 @@ int createSocket(int socketFileDescriptor) {
 }
 
 int bindSocket(int socketFileDescriptor, struct sockaddr_in serverAddress) {
-    int bindFD1 = bind(socketFileDescriptor, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
-    if(bindFD1 < 0) {
+    int bindSuccess = bind(socketFileDescriptor, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
+    if(bindSuccess < 0) {
       error("Error binding socket");
     }
-    return bindFD1;
+    return bindSuccess;
 }
 
 int selectFileDescritporSet(fd_set FDSet) {
@@ -84,11 +84,28 @@ int selectFileDescritporSet(fd_set FDSet) {
     if (selectDescriptor < 0) {
         error("Error selecting");
     }
+    return selectDescriptor;
+}
+
+int read_from_client(int socketFD) {
+    char buffer[255];
+    int numberOfBytes = read(socketFD, buffer, 512);
+
+    if(numberOfBytes < 0) {
+        error("error reading");
+    }
+    else if(numberOfBytes == 0) {
+        return -1;
+    }
+    else {
+        cout << stderr << "Server: got message: `%s'" << buffer << endl;
+        return 0;
+    }
 }
 
 int main(int argc, char *argv[]) {
 
-    cout << provide_unique_id();
+    cout << provide_unique_id() << endl;
 
     //select 3 consecutive ports for port knocking
     int portNumber1 = 50040;
@@ -100,7 +117,7 @@ int main(int argc, char *argv[]) {
     //int socketFileDescriptor2 = 0;
     //int socketFileDescriptor3 = 0;*/
 
-    int bindFD1 = 0;
+    int bindSuccess = 0;
 
     int newSocketFD1 = 0;
 
@@ -114,14 +131,14 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in serverAddress;
     struct sockaddr_in clientAddress;
 
-    createSocket(socketFD1);
+    socketFD1 = createSocket(socketFD1);
 
     bzero((char *) &serverAddress, sizeof(serverAddress)); // initializes serverAddress to zeros.
     serverAddress.sin_family = AF_INET; // code for address family, this is always set to AF_INET
     serverAddress.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
     serverAddress.sin_port = portNumber1;
 
-    bindFD1 = bindSocket(socketFD1, serverAddress);
+    bindSuccess = bindSocket(socketFD1, serverAddress);
 
     // Initialize the set of active sockets.
     FD_ZERO (&activeFDSet);
@@ -130,6 +147,8 @@ int main(int argc, char *argv[]) {
     while(1) {
         // Block untill input arrives on one or more of the active sockets
         readFDSet = activeFDSet;
+        selectFileDescritporSet(readFDSet);
+
         for(int i = 0; i < FD_SETSIZE; i++) {
             // check if file descriptor is part of the set
             if(FD_ISSET(i, &readFDSet)) {
@@ -141,7 +160,7 @@ int main(int argc, char *argv[]) {
                     and allocate a new file descriptor for that socket.*/
                     newSocketFD1 = accept(socketFD1, (struct sockaddr *) &clientAddress, &clilen);
                     if(newSocketFD1 < 0) {
-                        error("accept errror");
+                        error("accept error");
                     }
 
                     cout << stderr << "Server: connect from host %s, port %hd." << endl;
@@ -149,10 +168,10 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                     // data arriving on a connected socket
-                    //if (read_from_client (i) < 0) {
+                    if (read_from_client (i) < 0) {
                         close (i);
                         FD_CLR (i, &activeFDSet);
-                    //}
+                    }
                 }
             }
         }
