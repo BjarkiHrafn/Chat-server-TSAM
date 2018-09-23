@@ -146,28 +146,28 @@ int main(int argc, char *argv[]) {
     serverAddress.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
 
 
-    /*for(int i = portNumber1; i <= portNumber3; i++) {
+    for(int i = portNumber1; i <= portNumber3; i++) {
         serverAddress.sin_port = i;
         if(connect(socketFD1,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0)
             cout<<"Port: "<< i <<" is open"<<endl;
         else
             error("Port closed");
-    }*/
+    }
     serverAddress.sin_port = htons(portNumber1);
+    //serverAddress.sin_port = htons(8001);
     bindSuccess = bindSocket(socketFD1, serverAddress);
 
     // Initialize the set of active sockets.
     //socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
+    //cout<< stoi(activeFDSet)<<endl;
     if (listen (socketFD1, 5) < 0) {
     error ("listen");
     exit (EXIT_FAILURE);
-    }else {
+    } else {
         cout<< "Listening..."<<endl;
     }
-    struct timeval* timeout;
-    timeout->tv_sec = 5;
 
     while(1) {
         // Block untill input arrives on one or more of the active sockets
@@ -192,8 +192,11 @@ int main(int argc, char *argv[]) {
                         error("accept error");
                     }
 
-                    cout << stderr << "Server: connect from host %s, port %hd." << endl;
+                    cout << stderr << "Server: connect from host %s, port: "<< portNumber1 << endl;
                     cout << inet_ntoa (clientAddress.sin_addr) << clientAddress.sin_port << endl;
+                    FD_ZERO (&activeFDSet);
+                    FD_SET (socketFD1, &activeFDSet);
+
                 }
                 else {
                     // data arriving on a connected socket

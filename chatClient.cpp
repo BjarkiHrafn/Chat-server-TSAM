@@ -41,7 +41,6 @@ int main(int argc, char *argv[]){
     bzero((char *) &serv_addr, sizeof(serv_addr));//fill the serv_addr with zeros
     serv_addr.sin_family = AF_INET; // This is always set to AF_INET
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);//copy from the server pointers address into the sockaddr_in variable
-    int currentPort = 0;
 
     serv_addr.sin_port = htons(port);
 
