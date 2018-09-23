@@ -110,6 +110,20 @@ int read_from_client(int socketFD) {
     }
 }
 
+void arePortsOpen(int socketFD, int startPort, int endPort) {
+    struct sockaddr_in serverAddress;
+
+    for(int i = startPort; i <= endPort; i++) {
+        serverAddress.sin_port = i;
+        if(connect(socketFD,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0) {
+            cout<<"Port: "<< i <<" is open"<<endl;
+        }
+        else {
+            error("Port closed");
+        }
+    }
+}
+
 int main(int argc, char *argv[]) {
 
 
@@ -121,11 +135,9 @@ int main(int argc, char *argv[]) {
     int portNumber3 = 50042;
 
     // initalize File Descriptors
-    int socketFD1 = 0;
-    int socket50041 = 0;
-    int socket50042 = 0;
-    //int socketFileDescriptor2 = 0;
-    //int socketFileDescriptor3 = 0;*/
+    int socketFD1 = 0; // main socket
+    int socketFD2 = 0;
+    int socketFD3 = 0;
 
     int bindSuccess = 0;
 
@@ -138,51 +150,53 @@ int main(int argc, char *argv[]) {
     int returnValue = 0; // return value for the read() and write() calls; i.e. it contains the number of characters read or written.
     socklen_t clilen = 0; // stores the size of the address of the client. This is needed for the accept system call.
 
-    struct sockaddr_in serverAddress;
-    struct sockaddr_in serverAddressFor50041;
-    struct sockaddr_in serverAddressFor50042;
+    struct sockaddr_in serverAddress1;
+    struct sockaddr_in serverAddress2;
+    struct sockaddr_in serverAddress3;
     struct sockaddr_in clientAddress;
 
     socketFD1 = createSocket(socketFD1);
-    socket50041 = createSocket(socket50041);
-    socket50042 = createSocket(socket50042);
+    socketFD2 = createSocket(socketFD2);
+    socketFD3 = createSocket(socketFD3);
 
-    bzero((char *) &serverAddress, sizeof(serverAddress)); // initializes serverAddress to zeros.
-    serverAddress.sin_family = AF_INET; // code for address family, this is always set to AF_INET
-    serverAddress.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
+    bzero((char *) &serverAddress1, sizeof(serverAddress1)); // initializes serverAddress to zeros.
+    bzero((char *) &serverAddress2, sizeof(serverAddress2));
+    bzero((char *) &serverAddress3, sizeof(serverAddress3));
 
+    serverAddress1.sin_family = AF_INET; // code for address family, this is always set to AF_INET
+    serverAddress2.sin_family = AF_INET;
+    serverAddress3.sin_family = AF_INET;
 
-    for(int i = portNumber1; i <= portNumber3; i++) {
-        serverAddress.sin_port = i;
-        if(connect(socketFD1,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0)
-            cout<<"Port: "<< i <<" is open"<<endl;
-        else
-            error("Port closed");
-    }
-    serverAddress.sin_port = htons(portNumber1);
-    serverAddressFor50041.sin_port = htons(portNumber2);
-    serverAddressFor50042.sin_port = htons(portNumber3);
+    serverAddress1.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
+    serverAddress2.sin_addr.s_addr = INADDR_ANY;
+    serverAddress3.sin_addr.s_addr = INADDR_ANY;
+
+    // check if ports are open
+    arePortsOpen(socketFD1, portNumber1, portNumber3);
+
+    serverAddress1.sin_port = htons(portNumber1);
+    serverAddress2.sin_port = htons(portNumber2);
+    serverAddress3.sin_port = htons(portNumber3);
     //serverAddress.sin_port = htons(8001);
-    bindSuccess = bindSocket(socketFD1, serverAddress);
-    bindSocket(socket50041, serverAddressFor50041);
-    bindSocket(socket50042, serverAddressFor50042);
+    bindSocket(socketFD1, serverAddress1);
+    bindSocket(socketFD2, serverAddress2);
+    bindSocket(socketFD3, serverAddress3);
 
     // Initialize the set of active sockets.
     //socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
-    FD_SET (socket50041, &activeFDSet);
-    FD_SET (socket50042, &activeFDSet);
+
     //cout<< stoi(activeFDSet)<<endl;
-    if(listen(socket50041, 5) >= 0) {
-        cout<<"socket50041 went through"<<endl;
-        if(listen(socket50042, 5) >= 0) {
-            cout<<"socket50042 went through" <<endl;
-            if(listen(socketFD1, 5) >= 0) {
+    if(listen(socketFD3, 5) >= 0) {
+        cout<<"socketFD3 went through"<<endl;
+        if(listen(socketFD1, 5) >= 0) {
+            cout<<"socketFD2 went through" <<endl;
+            if(listen(socketFD2, 5) >= 0) {
                 cout<<"Listening..."<<endl;
             } else {error("Listen");}
-        } else {error("socket40042");}
-    } else {error("socket50041");}
+        } else {error("socket1");}
+    } else {error("socket3");}
 
     /*if (listen (socketFD1, 5) < 0) {
     error ("listen");
@@ -213,10 +227,11 @@ int main(int argc, char *argv[]) {
                         error("accept error");
                     }
 
-                    cout << stderr << "Server: connect from host %s, port: "<< portNumber1 << endl;
-                    cout << inet_ntoa (clientAddress.sin_addr) << clientAddress.sin_port << endl;
-                    FD_ZERO (&activeFDSet);
-                    FD_SET (socketFD1, &activeFDSet);
+                    fprintf (stderr,
+                             "Server: connect from host %s, port %hd.\n",
+                             inet_ntoa (clientAddress.sin_addr),
+                             ntohs (clientAddress.sin_port));
+                    FD_SET (newSocketFD1, &activeFDSet);
 
                 }
                 else {
@@ -229,6 +244,5 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-
     return 0;
 }
