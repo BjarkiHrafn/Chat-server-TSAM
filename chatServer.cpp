@@ -122,6 +122,8 @@ int main(int argc, char *argv[]) {
 
     // initalize File Descriptors
     int socketFD1 = 0;
+    int socket50041 = 0;
+    int socket50042 = 0;
     //int socketFileDescriptor2 = 0;
     //int socketFileDescriptor3 = 0;*/
 
@@ -137,9 +139,13 @@ int main(int argc, char *argv[]) {
     socklen_t clilen = 0; // stores the size of the address of the client. This is needed for the accept system call.
 
     struct sockaddr_in serverAddress;
+    struct sockaddr_in serverAddressFor50041;
+    struct sockaddr_in serverAddressFor50042;
     struct sockaddr_in clientAddress;
 
     socketFD1 = createSocket(socketFD1);
+    socket50041 = createSocket(socket50041);
+    socket50042 = createSocket(socket50042);
 
     bzero((char *) &serverAddress, sizeof(serverAddress)); // initializes serverAddress to zeros.
     serverAddress.sin_family = AF_INET; // code for address family, this is always set to AF_INET
@@ -154,20 +160,36 @@ int main(int argc, char *argv[]) {
             error("Port closed");
     }
     serverAddress.sin_port = htons(portNumber1);
+    serverAddressFor50041.sin_port = htons(portNumber2);
+    serverAddressFor50042.sin_port = htons(portNumber3);
     //serverAddress.sin_port = htons(8001);
     bindSuccess = bindSocket(socketFD1, serverAddress);
+    bindSocket(socket50041, serverAddressFor50041);
+    bindSocket(socket50042, serverAddressFor50042);
 
     // Initialize the set of active sockets.
     //socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
+    FD_SET (socket50041, &activeFDSet);
+    FD_SET (socket50042, &activeFDSet);
     //cout<< stoi(activeFDSet)<<endl;
-    if (listen (socketFD1, 5) < 0) {
+    if(listen(socket50041, 5) >= 0) {
+        cout<<"socket50041 went through"<<endl;
+        if(listen(socket50042, 5) >= 0) {
+            cout<<"socket50042 went through" <<endl;
+            if(listen(socketFD1, 5) >= 0) {
+                cout<<"Listening..."<<endl;
+            } else {error("Listen");}
+        } else {error("socket40042");}
+    } else {error("socket50041");}
+
+    /*if (listen (socketFD1, 5) < 0) {
     error ("listen");
     exit (EXIT_FAILURE);
     } else {
         cout<< "Listening..."<<endl;
-    }
+    }*/
 
     while(1) {
         // Block untill input arrives on one or more of the active sockets
@@ -185,7 +207,6 @@ int main(int argc, char *argv[]) {
                     create a new socket with the same socket type protocol
                     and address family as the specified socket,
                     and allocate a new file descriptor for that socket.*/
-
 
                     newSocketFD1 = accept(socketFD1, (struct sockaddr *) &clientAddress, &clilen);
                     if(newSocketFD1 < 0) {
