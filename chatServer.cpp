@@ -25,8 +25,13 @@ http://www.gnu.org/software/libc/manual/html_node/Server-Example.html
 #include <ctime> // for the timestamp
 #include <sstream>
 #include <iomanip>
+#include <vector> //fore the username vector
+#include <algorithm> // for the username vector
 
 using namespace std;
+
+string msgBuf;
+vector<string> users;
 
 void error(const char *msg) {
     perror(msg);
@@ -60,6 +65,7 @@ string provide_unique_id() {
     auto str = oss.str();
 
     result = result + " Y_Project_2 42" + str;
+
     return result;
 }
 
@@ -96,6 +102,7 @@ int selectFileDescritporSet(fd_set FDSet) {
 
 int read_from_client(int socketFD) {
     char buffer[255];
+
     int numberOfBytes = read(socketFD, buffer, 512);
 
     if(numberOfBytes < 0) {
@@ -105,17 +112,25 @@ int read_from_client(int socketFD) {
         return -1;
     }
     else {
-        cout << stderr << "Server: got message: `%s'" << buffer << endl;
+        msgBuf += buffer;
+        msgBuf += " ";
+        cout<<"msgBuf is: "<< msgBuf<<endl;
+        //strcmp(msgBuf, buffer);
+        cout << stderr << "Server: got message: " << buffer << endl;
         return 0;
     }
 }
 
-void arePortsOpen(int socketFD, int startPort, int endPort) {
+void arePortsOpen(int &socketFD, int startPort, int endPort) {
     struct sockaddr_in serverAddress;
+    bzero((char *) &serverAddress, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+
 
     for(int i = startPort; i <= endPort; i++) {
-        serverAddress.sin_port = i;
-        if(connect(socketFD,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0) {
+        serverAddress.sin_port = htons(i);
+        if(connect(socketFD,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) >= 0) {
             cout<<"Port: "<< i <<" is open"<<endl;
         }
         else {
@@ -124,11 +139,41 @@ void arePortsOpen(int socketFD, int startPort, int endPort) {
     }
 }
 
+void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress) {
+    char buffer[5000];
+
+    string result = msgBuf;
+    vector<string> splitter;
+    istringstream iss(result);
+    for(string result; iss >> result; )
+        splitter.push_back(result);
+
+    if(splitter[0] == "ID")
+        result = provide_unique_id();
+    else if(splitter[0] == "CONNECT" && splitter.size() > 1) {
+        if(find(users.begin(), users.end(), splitter[1]) == users.end()) {
+            users.push_back(splitter[1]);
+            result = splitter[1];
+            msgBuf = "";
+
+        } else {
+            result = "F";
+        }
+    }
+    else if(splitter[0] == "LEAVE") {
+        cout<<splitter[1]<<" wants to leave!!"<<endl;
+    }
+    char * stringToChar = new char[result.length()+1];
+    //cout<<"splitter[0]: "<< splitter[0]<< " splitter[1]: "<< splitter[1]<<endl;
+    strcpy (stringToChar, result.c_str());
+    sendto(newSocketFD1, stringToChar, 200, 0, (struct sockaddr*)&clientAddress, sizeof clientAddress);
+}
+
 int main(int argc, char *argv[]) {
 
 
-    if(strcmp(argv[1], "ID") == 0)
-        cout << provide_unique_id() << endl;
+    //if(strcmp(argv[1], "ID") == 0)
+    //    cout << provide_unique_id() << endl;
     //select 3 consecutive ports for port knocking
     int portNumber1 = 50040;
     int portNumber2 = 50041;
@@ -172,7 +217,7 @@ int main(int argc, char *argv[]) {
     serverAddress3.sin_addr.s_addr = INADDR_ANY;
 
     // check if ports are open
-    arePortsOpen(socketFD1, portNumber1, portNumber3);
+    //arePortsOpen(socketFD1, portNumber1, portNumber3);
 
     serverAddress1.sin_port = htons(portNumber1);
     serverAddress2.sin_port = htons(portNumber2);
@@ -209,6 +254,7 @@ int main(int argc, char *argv[]) {
         // Block untill input arrives on one or more of the active sockets
         readFDSet = activeFDSet;
         //selectFileDescritporSet(readFDSet);
+
         int selectValue = select(FD_SETSIZE, &readFDSet, NULL, NULL, NULL);
         if(selectValue < 0) error("Select");
         cout<<"Done selecting :)"<<endl;
@@ -236,10 +282,14 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                     // data arriving on a connected socket
+
                     if (read_from_client (i) < 0) {
                         close (i);
                         FD_CLR (i, &activeFDSet);
                     }
+
+                    checkCommandAndReact(newSocketFD1, clientAddress);
+
                 }
             }
         }
