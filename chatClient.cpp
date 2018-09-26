@@ -19,7 +19,7 @@ using namespace std;
 
 char packetBuf[4096];
 string ID;
-string oldMsg;
+string oldMsg = "";
 
 void error(const char *msg)
 {
@@ -34,8 +34,15 @@ int port_is_open(struct sockaddr_in address, int sockfd) {
 int read_from_client(int socketFD) {
     char buffer[255];
     int numberOfBytes = read(socketFD, buffer, 512);
+    char *bfs = buffer;
+    string connect = "CONNECT";
+    bool trew = (connect == oldMsg);
+    oldMsg.erase(oldMsg.find_last_not_of(" ") + 1);
 
-    cout<<"Old: "<< oldMsg.c_str()<<endl;
+    cout<<"trew: "<< trew<<endl;
+
+    cout<<"connect: "<< connect<<endl;
+    cout<<"Old:."<< oldMsg<<"."<<endl;
     cout<<"New: "<< buffer<<endl;
 
     if(numberOfBytes < 0) {
@@ -45,10 +52,10 @@ int read_from_client(int socketFD) {
         return -1;
     }
     else {
-        if(strcasecmp("ID", buffer) == 0){
+        if(strcasecmp("ID", packetBuf) == 0){
             cout<<buffer<<endl;
         }
-        else if(strcasecmp("F", buffer) != 0 && strcmp("CONNECT", oldMsg.c_str()) != 0) {
+        else if(connect == oldMsg) {
             cout<<"Connect went through"<<endl;
             ID = buffer;
             memset(buffer, 0, sizeof(buffer));
@@ -59,6 +66,7 @@ int read_from_client(int socketFD) {
 
         cout << stderr << "client: got message: `%s'" << buffer << endl;
         oldMsg = buffer;
+        memset(buffer, 0, sizeof(buffer));
         //strcpy(buffer, oldMsg);
         return 0;
     }
