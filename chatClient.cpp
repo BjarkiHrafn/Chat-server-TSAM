@@ -16,6 +16,11 @@
 
 using namespace std;
 
+
+char packetBuf[4096];
+string ID;
+string oldMsg;
+
 void error(const char *msg)
 {
     perror(msg);
@@ -26,12 +31,50 @@ int port_is_open(struct sockaddr_in address, int sockfd) {
     return connect(sockfd,(struct sockaddr *) &address,sizeof(address));
 }
 
+int read_from_client(int socketFD) {
+    char buffer[255];
+    int numberOfBytes = read(socketFD, buffer, 512);
+
+    cout<<"Old: "<< oldMsg.c_str()<<endl;
+    cout<<"New: "<< buffer<<endl;
+
+    if(numberOfBytes < 0) {
+        error("error reading");
+    }
+    else if(numberOfBytes == 0) {
+        return -1;
+    }
+    else {
+        if(strcasecmp("ID", buffer) == 0){
+            cout<<buffer<<endl;
+        }
+        else if(strcasecmp("F", buffer) != 0 && strcmp("CONNECT", oldMsg.c_str()) != 0) {
+            cout<<"Connect went through"<<endl;
+            ID = buffer;
+            memset(buffer, 0, sizeof(buffer));
+
+        } else {
+            cout<<"Connect didn't work"<<endl;
+        }
+
+        cout << stderr << "client: got message: `%s'" << buffer << endl;
+        oldMsg = buffer;
+        //strcpy(buffer, oldMsg);
+        return 0;
+    }
+
+}
+
 int main(int argc, char *argv[]){
 
     int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;
     int port = stoi(argv[2]);
+
+    int sendBytes;
+    ID = "unknown";
+
 
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0); // Open tcp Socket
@@ -46,6 +89,25 @@ int main(int argc, char *argv[]){
 
     if(port_is_open(serv_addr, sockfd) == 0){
         cout<<"Port "<<port<<": Open"<<endl;
+        while(1) {
+            cout<<ID<<": ";
+            cin >> packetBuf;
+            cout<<endl;
+            if(strcasecmp("LEAVE", packetBuf) == 0) {
+                string disco = disco + "LEAVE" + " " + ID;
+                char * stringToChar = new char[disco.length()+1];
+                strcpy (stringToChar, disco.c_str());
+                sendto(sockfd, stringToChar, 200, 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
+                break;
+            }
+
+            sendBytes = sendto(sockfd, packetBuf, 200, 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
+            if(sendBytes < 0) error("send: ");
+            read_from_client(sockfd);
+        }
+
+
+
     }else{
         cout<<"Port "<<port<<": Closed"<<endl;
     }
