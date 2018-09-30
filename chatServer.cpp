@@ -1,10 +1,3 @@
-/* helpful links
-https://linux.die.net/man/2/socket
-client and server example:
-http://www.linuxhowtos.org/C_C++/socket.htm
-http://www.gnu.org/software/libc/manual/html_node/Server-Example.html
-*/
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -13,21 +6,16 @@ http://www.gnu.org/software/libc/manual/html_node/Server-Example.html
 #include <array>
 #include <string.h> // for bzero
 #include <fstream> // fpr read
-
 #include <arpa/inet.h> //inet_ntoa
-
 #include <stdlib.h>
 #include <unistd.h> // close()
-
-
 #include <ctime> // for the timestamp
 #include <sstream>
 #include <iomanip>
 #include <vector> //fore the username vector
 #include <algorithm> // for the username vector
 #include <map>
-
- #include <sys/ioctl.h> // ioctl
+#include <sys/ioctl.h> // ioctl
 
 using namespace std;
 
@@ -95,7 +83,7 @@ string provide_unique_id() {
 }
 
 int createSocket(int socketFileDescriptor) {
-  // SOCK_NONBLOCK
+    // SOCK_NONBLOCK
     socketFileDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (socketFileDescriptor < 0) {
          error("ERROR opening socket");
@@ -106,7 +94,7 @@ int createSocket(int socketFileDescriptor) {
 int bindSocket(int socketFileDescriptor, struct sockaddr_in &serverAddress) {
     int bindSuccess = bind(socketFileDescriptor, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
     if(bindSuccess < 0) {
-      error("Error binding socket");
+        error("Error binding socket");
     }
     return bindSuccess;
 }
@@ -128,9 +116,7 @@ int selectFileDescritporSet(fd_set FDSet) {
 
 int read_from_client(int socketFD) {
     char buffer[2000];
-
     int numberOfBytes = read(socketFD, buffer, 2000);
-
     if(numberOfBytes < 0) {
         error("error reading");
     }
@@ -138,26 +124,42 @@ int read_from_client(int socketFD) {
         return -1;
     }
     else {
-
         msgBuf = buffer;
         memset(buffer, 0, sizeof buffer);
         return 0;
     }
 }
 
+void findAvailablePorts(int startPort, int endPort) {
+    //initalize test variables
+    struct sockaddr_in serverAddress;
+    bzero((char *) &serverAddress, sizeof(serverAddress)); // initializes serverAddress to zeros.
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    int testSocketFD = createSocket(testSocketFD);
 
-void arePortsOpen(struct sockaddr_in serverAddress, int socketFD, int startPort, int endPort) {
-
-    /*for(int i = startPort; i <= endPort; i++) {
+    // counters used for checking groups of three
+    int counter = 0;
+    for(int i = startPort; i <= endPort; i++) {
+        counter++;
+        // set the port which wil be checked
         serverAddress.sin_port = i;
-        if(connect(socketFD,(struct sockaddr *) &serverAddress,sizeof(serverAddress)) < 0) {
-            cout<<"Port: "<< i <<" is closed"<<endl;
+        // check if port is being used
+        if(connect(testSocketFD,(struct sockaddr *) &serverAddress,sizeof(serverAddress) < 0)) {
+            // check if we have found the consecutive unused ports
+            if(counter%3 == 0) {
+                portNumber3 = i;
+                portNumber2 = i - 1;
+                portNumber1 = i - 2;
+                break;
+            }
         }
         else {
-            cout << i << endl;
-            error("Port is open");
+            // if we find a used port then we reset the counter
+            counter = 0;
         }
-    }*/
+    }
+    cout << "PortKock: " << portNumber2 << " " << portNumber3 << " " << portNumber1 << endl;
 }
 
 string getCurrTimestamp() {
@@ -170,44 +172,38 @@ string getCurrTimestamp() {
 }
 
 bool correctKnock(Knock x) {
-
-    if(x.ports.size() != 3)
-    {
-      return false;
+    if(x.ports.size() != 3){
+        return false;
     }
-
     string currentTime = getCurrTimestamp();
-
     //compare everything exept minutes and seconds
     for(int i = 0; i < currentTime.size()-5; i++) {
         if(currentTime[i] != x.connectTime[i]) {
-            return false; // we treat the port knock as incorrect if it doesnt happen within a minute
+            // we treat the port knock as incorrect if it doesnt happen within a minute
+            return false;
         }
     }
-
     vector<int> temp = x.ports;
     // hardcoded port knock
     return (temp[0] == portNumber2 && temp[1] == portNumber3 && temp[2] == portNumber1);
 }
 
 void updateKnockMap(struct sockaddr_in clientAddress, map<string, Knock> &knockMap, int port) {
-    // if the portvector contains three ports then erase the data
+    // if a clients portvector contains three ports then erase the data
     if(knockMap.count(inet_ntoa(clientAddress.sin_addr)) > 0) {
         if(knockMap[inet_ntoa(clientAddress.sin_addr)].ports.size() >= 3) {
             knockMap.erase(inet_ntoa(clientAddress.sin_addr));
         }
     }
-
+    // if a client exists in the map then we only update the portvector
     if(knockMap.count(inet_ntoa(clientAddress.sin_addr)) > 0) {
         knockMap[inet_ntoa(clientAddress.sin_addr)].ports.push_back(port);
-    }
+    } // if a client does not exist int the map then we add him to the map
     else {
-
         pair<string, Knock> x;
         x.first = inet_ntoa(clientAddress.sin_addr);
         x.second.ports.push_back(port);
         x.second.connectTime = getCurrTimestamp();
-        cout << "POPULATED CONNECT TIME: " << x.second.connectTime << " !!!" << endl;
         knockMap.insert(x);
     }
 }
@@ -259,18 +255,14 @@ void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress, 
     }
 
     else if(theCommand == "CONNECT" && theRequest != "") {
+        // if a client has not connected before then we add him to a client map
         if(usersmap.count(theRequest) <= 0) {
             pair<string, clientInfo> x;
             x.first = theRequest;
             x.second.sockfd = newSocketFD1;
             x.second.clientAddress = clientAddress;
-
             usersmap.insert(x);
-
             msgBuf = "";
-
-        } else {
-            result = "F";
         }
     }
     else if(theCommand == "MSG" && theRequest != "" && theRequest != "--ALL" && theMessage != "") {
@@ -287,8 +279,6 @@ void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress, 
             strcpy (stringToChar, theMessage.c_str());
             sendto(cliSockfd, stringToChar, 200, 0, (struct sockaddr*)&cliAddr, sizeof cliAddr);
         }
-
-
     }
     else if(theCommand == "MSG" && theRequest == "--ALL" && theMessage != "") {
         cout << "Now sending message: " << theMessage << ", to everyone"<<endl;
@@ -330,20 +320,29 @@ void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress, 
 
 int main(int argc, char *argv[]) {
 
+    if (argc < 3) {
+        cout << "use: ./chatServer startPort endPort" << endl;
+        exit(1);
+    }
+    int startPort = stoi(argv[1]);
+    int endPort = stoi(argv[2]);
+
+    if((startPort + 1) >= endPort) {
+        cout << "StarPort must be higher than endPort" << endl << "and there must be atleast one port between them" << endl;
+        exit(1);
+    }
+
     map<string, Knock> knockMap;
     map<string, clientInfo> usersmap;
-    //if(strcmp(argv[1], "ID") == 0)
-    //    cout << provide_unique_id() << endl;
 
-    // initalize File Descriptors
     int socketFD1 = 0; // main socket
-    int socketFD2 = 0;
-    int socketFD3 = 0;
+    int socketFD2 = 0; // socket for port knocking
+    int socketFD3 = 0; // socket for port knocking
 
     int bindSuccess = 0;
     int portConnectedTo = 0; // the port thie client is connected to
 
-    int newSocketFD1 = 0;
+    int newSocketFD1 = 0; // socket created when a client is accepted
 
     // create set of file descritor sets
     fd_set activeFDSet;
@@ -357,7 +356,10 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in serverAddress3;
     struct sockaddr_in clientAddress;
 
+    // a unique id provided for the server when it is first launched
     serverID = provide_unique_id();
+
+    // create sockets
     socketFD1 = createSocket(socketFD1);
     socketFD2 = createSocket(socketFD2);
     socketFD3 = createSocket(socketFD3);
@@ -373,28 +375,29 @@ int main(int argc, char *argv[]) {
     setsockopt(socketFD2, SOL_SOCKET, SO_REUSEADDR, &q, sizeof(q));
     setsockopt(socketFD3, SOL_SOCKET, SO_REUSEADDR, &q, sizeof(q));
 
-    bzero((char *) &serverAddress1, sizeof(serverAddress1)); // initializes serverAddress to zeros.
+    // initializes serverAddress to zeros.
+    bzero((char *) &serverAddress1, sizeof(serverAddress1));
     bzero((char *) &serverAddress2, sizeof(serverAddress2));
     bzero((char *) &serverAddress3, sizeof(serverAddress3));
 
-    serverAddress1.sin_family = AF_INET; // code for address family, this is always set to AF_INET
+    // code for address family, this is always set to AF_INET
+    serverAddress1.sin_family = AF_INET;
     serverAddress2.sin_family = AF_INET;
     serverAddress3.sin_family = AF_INET;
 
-    serverAddress1.sin_addr.s_addr = INADDR_ANY; // this will always be the IP address of the machine on which the server is running
+    // this will always be the IP address of the machine on which the server is running
+    serverAddress1.sin_addr.s_addr = INADDR_ANY;
     serverAddress2.sin_addr.s_addr = INADDR_ANY;
     serverAddress3.sin_addr.s_addr = INADDR_ANY;
 
-    // when the client is startet we need to pass in a range of ports
-    // that we want to ceck are open. if we find 3 consecutive port on
-    // that range then those are the ports we will use
-    arePortsOpen(serverAddress1, socketFD1, portNumber1, portNumber3);
+    // finds three avaiable consecutive ports and assigns them
+    findAvailablePorts(startPort, endPort);
 
+    // the ports are set for the server which are chosen in the findAvailablePorts function
     serverAddress1.sin_port = htons(portNumber1);
     serverAddress2.sin_port = htons(portNumber2);
     serverAddress3.sin_port = htons(portNumber3);
 
-    cout << "ports set" << endl;
     //serverAddress.sin_port = htons(8001);
     bindSocket(socketFD1, serverAddress1);
     bindSocket(socketFD2, serverAddress2);
@@ -404,9 +407,7 @@ int main(int argc, char *argv[]) {
     bind(socketFD2, (struct sockaddr *) &serverAddress2, sizeof(serverAddress2));
     bind(socketFD3, (struct sockaddr *) &serverAddress3, sizeof(serverAddress3));*/
 
-    cout << "Please knock before you enter.." << endl;
     if(listen(socketFD1, 5) < 0) {
-        cout << "error is below" << endl;
         error("socket1");
     }
     if(listen(socketFD2, 5) < 0) {
@@ -417,14 +418,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize the set of active sockets.
-    //socketFD1 = createSocket(socketFD1);
     FD_ZERO (&activeFDSet);
     FD_SET (socketFD1, &activeFDSet);
     FD_SET (socketFD2, &activeFDSet);
     FD_SET (socketFD3, &activeFDSet);
 
     while(1) {
-
         // Block untill input arrives on one or more of the active sockets
         readFDSet = activeFDSet;
         //selectFileDescritporSet(readFDSet);
@@ -440,18 +439,18 @@ int main(int argc, char *argv[]) {
                     create a new socket with the same socket type protocol
                     and address family as the specified socket,
                     and allocate a new file descriptor for that socket.*/
-
                     newSocketFD1 = accept(i, (struct sockaddr *) &clientAddress, &clilen);
                     if(newSocketFD1 < 0) {
                         error("accept error");
                     }
-
 
                     fprintf (stderr,
                              "Server: connect from host %s, port %hd.\n",
                              inet_ntoa (clientAddress.sin_addr),
                              ntohs (clientAddress.sin_port));
 
+                   // find the correct port depending on which socket the client is connected
+                   // this port is then added to the port knocking vector
                    if(i == socketFD1)
                        portConnectedTo = portNumber1;
                    else if(i == socketFD2)
@@ -459,32 +458,26 @@ int main(int argc, char *argv[]) {
                    else
                        portConnectedTo = portNumber3;
 
-                   /*updateKnockMap(clientAddress, knockMap, portConnectedTo);
+                   updateKnockMap(clientAddress, knockMap, portConnectedTo);
                    Knock temp = knockMap[inet_ntoa(clientAddress.sin_addr)];
 
-                   cout << "time for check" << endl;
                    if(correctKnock(temp)){
-                       cout << "---CORRECT KNOCK---" << endl;
+                       // add the file descritor from the accept to the active fd set
                        FD_SET (newSocketFD1, &activeFDSet);
                    }
                    else {
-                       //cout << "---INCORRECT KNOCK---" << endl;
+                       // close the clients connection because he has not completed a correct port knock
                        close (newSocketFD1);
-                       //FD_CLR (i, &activeFDSet);
-                       cout << "done closing" << endl;
-                   }*/
-                   FD_SET (newSocketFD1, &activeFDSet);
+                   }
                 }
                 else {
-
+                    // read data from client
                     if (read_from_client (i) < 0) {
-
                         close (i);
                         FD_CLR (i, &activeFDSet);
                     }
-
+                    // do a correct response depending on which command the client ran
                     checkCommandAndReact(i, clientAddress, usersmap);
-                    cout << "done checking command and reacting" << endl;
                 }
             }
         }
