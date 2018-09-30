@@ -13,17 +13,33 @@
 #include <chrono>       // milliseconds
 #include <algorithm>    // std::random_shuffle
 #include <vector>       // std::vector
+#include <sstream>      // to isolate the command typed in
 
 using namespace std;
 
 
 char packetBuf[4096];
 string ID;
-string oldMsg = "";
+
+string user = "unknown";
+bool intialID = true;
+string theCommand;
+string theRequest;
 
 void error(const char *msg)
 {
     perror(msg);
+}
+
+string getCommand(string fromCIN) {
+    vector<string> splitter;
+    string result = fromCIN;
+
+    istringstream iss(result);
+    for(string result; iss >> result; )
+        splitter.push_back(result);
+
+    theCommand = splitter[0];
 }
 
 int port_is_open(struct sockaddr_in address, int sockfd) {
@@ -31,19 +47,10 @@ int port_is_open(struct sockaddr_in address, int sockfd) {
     return connect(sockfd,(struct sockaddr *) &address,sizeof(address));
 }
 
-int read_from_client(int socketFD) {
+int read_from_client(int socketFD, struct sockaddr_in serv_addr) {
     char buffer[255];
     int numberOfBytes = read(socketFD, buffer, 512);
-    char *bfs = buffer;
-    string connect = "CONNECT";
-    bool trew = (connect == oldMsg);
-    oldMsg.erase(oldMsg.find_last_not_of(" ") + 1);
-
-    cout<<"trew: "<< trew<<endl;
-
-    cout<<"connect: "<< connect<<endl;
-    cout<<"Old:."<< oldMsg<<"."<<endl;
-    cout<<"New: "<< buffer<<endl;
+    theRequest = buffer;
 
     if(numberOfBytes < 0) {
         error("error reading");
@@ -52,26 +59,36 @@ int read_from_client(int socketFD) {
         return -1;
     }
     else {
-        if(strcasecmp("ID", packetBuf) == 0){
-            cout<<buffer<<endl;
+        if(theCommand == "ID"){
+            cout<<"Your id is as follows: "<<theRequest<<endl;
+            intialID = false;
         }
-        else if(connect == oldMsg) {
+        else if(theCommand == "CHANGEID") {
+            cout<<"Your new id is: " << theRequest<<endl;
+        }
+        else if(theCommand == "WHO") {
+            cout<<"All users: "<< theRequest<<endl;
+        }
+        else if(theCommand == "CONNECT" && theRequest != "") {
             cout<<"Connect went through"<<endl;
             ID = buffer;
+            user = theRequest;
             memset(buffer, 0, sizeof(buffer));
-
-        } else {
-            cout<<"Connect didn't work"<<endl;
+        }
+        else if(theCommand == "READ") {
+            cout<<"You got a message: " << buffer<<endl;
+        }
+        else {
+            //cout<<"Connect didn't work"<<endl;
         }
 
-        cout << stderr << "client: got message: `%s'" << buffer << endl;
-        oldMsg = buffer;
         memset(buffer, 0, sizeof(buffer));
-        //strcpy(buffer, oldMsg);
+
         return 0;
     }
 
 }
+
 
 int main(int argc, char *argv[]){
 
@@ -95,23 +112,33 @@ int main(int argc, char *argv[]){
 
     serv_addr.sin_port = htons(port);
 
+
     if(port_is_open(serv_addr, sockfd) == 0){
         cout<<"Port "<<port<<": Open"<<endl;
         while(1) {
+
+            theCommand = "";
             cout<<ID<<": ";
-            cin >> packetBuf;
+
+            getline(cin, theCommand);
             cout<<endl;
-            if(strcasecmp("LEAVE", packetBuf) == 0) {
-                string disco = disco + "LEAVE" + " " + ID;
+
+            if(theCommand == "LEAVE") {
+                string disco =  "LEAVE " + ID;
+                intialID = true;
                 char * stringToChar = new char[disco.length()+1];
                 strcpy (stringToChar, disco.c_str());
-                sendto(sockfd, stringToChar, 200, 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
+                sendto(sockfd, stringToChar, sizeof(stringToChar), 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
+                //ID = "unknown";
                 break;
             }
-
-            sendBytes = sendto(sockfd, packetBuf, 200, 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
+            char * stringToChar = new char[theCommand.length()+1];
+            strcpy (stringToChar, theCommand.c_str());
+            sendBytes = sendto(sockfd, stringToChar, theCommand.length(), 0, (struct sockaddr*)&serv_addr, sizeof serv_addr);
             if(sendBytes < 0) error("send: ");
-            read_from_client(sockfd);
+            getCommand(theCommand);
+            read_from_client(sockfd, serv_addr);
+
         }
 
 
