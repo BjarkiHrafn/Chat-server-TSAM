@@ -77,7 +77,7 @@ string provide_unique_id() {
     oss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
     auto str = oss.str();
 
-    result = result + " Y_Project_2 42" + str;
+    result = result + " Y_Project_2 42 " + str;
 
     return result;
 }
