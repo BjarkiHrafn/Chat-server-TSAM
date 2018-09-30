@@ -31,6 +31,11 @@ http://www.gnu.org/software/libc/manual/html_node/Server-Example.html
 
 using namespace std;
 
+struct clientInfo {
+    int sockfd;
+    struct sockaddr_in clientAddress;
+} ;
+
 struct Knock {
     vector<int> ports;
     string connectTime;
@@ -41,7 +46,16 @@ int portNumber1 = 50040;
 int portNumber2 = 50041;
 int portNumber3 = 50042;
 
+bool isMessage;
+bool isCommand = true;
+bool isRequest = true;
+bool first = true;
+
+string msgUser;
 string msgBuf;
+string serverID;
+//string theCommand;
+string theRequest;
 vector<string> users;
 
 void error(const char *msg) {
@@ -113,9 +127,9 @@ int selectFileDescritporSet(fd_set FDSet) {
 }
 
 int read_from_client(int socketFD) {
-    char buffer[255];
+    char buffer[2000];
 
-    int numberOfBytes = read(socketFD, buffer, 512);
+    int numberOfBytes = read(socketFD, buffer, 2000);
 
     if(numberOfBytes < 0) {
         error("error reading");
@@ -124,14 +138,13 @@ int read_from_client(int socketFD) {
         return -1;
     }
     else {
-        msgBuf += buffer;
-        msgBuf += " ";
-        cout<<"msgBuf is: "<< msgBuf<<endl;
-        //strcmp(msgBuf, buffer);
-        cout << stderr << "Server: got message: " << buffer << endl;
+
+        msgBuf = buffer;
+        memset(buffer, 0, sizeof buffer);
         return 0;
     }
 }
+
 
 void arePortsOpen(struct sockaddr_in serverAddress, int socketFD, int startPort, int endPort) {
 
@@ -160,7 +173,6 @@ bool correctKnock(Knock x) {
 
     if(x.ports.size() != 3)
     {
-      cout << "KNOCK INCOMPLETE" << endl;
       return false;
     }
 
@@ -187,11 +199,10 @@ void updateKnockMap(struct sockaddr_in clientAddress, map<string, Knock> &knockM
     }
 
     if(knockMap.count(inet_ntoa(clientAddress.sin_addr)) > 0) {
-        cout << endl << "I EXIST: " << knockMap.count(inet_ntoa(clientAddress.sin_addr)) << endl << endl;
         knockMap[inet_ntoa(clientAddress.sin_addr)].ports.push_back(port);
     }
     else {
-        cout << endl << "I DONT EXIST" << endl << endl;
+
         pair<string, Knock> x;
         x.first = inet_ntoa(clientAddress.sin_addr);
         x.second.ports.push_back(port);
@@ -201,39 +212,126 @@ void updateKnockMap(struct sockaddr_in clientAddress, map<string, Knock> &knockM
     }
 }
 
-void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress) {
-    char buffer[5000];
+void checkCommandAndReact(int &newSocketFD1, struct sockaddr_in& clientAddress, map<string, clientInfo>& usersmap) {
+
+    char buffer[512];
 
     string result = msgBuf;
+    msgBuf = "";
+    string theCommand;
+    string theMessage;
+
     vector<string> splitter;
+
     istringstream iss(result);
     for(string result; iss >> result; )
         splitter.push_back(result);
 
-    if(splitter[0] == "ID")
-        result = provide_unique_id();
-    else if(splitter[0] == "CONNECT" && splitter.size() > 1) {
-        if(find(users.begin(), users.end(), splitter[1]) == users.end()) {
-            users.push_back(splitter[1]);
-            result = splitter[1];
+    if(splitter.size() == 2) {
+        theCommand = splitter[0];
+        theRequest = splitter[1];
+
+        splitter.clear();
+    }
+    else if(splitter.size() == 3) {
+        theCommand = splitter[0];
+        theRequest = splitter[1];
+        theMessage = splitter[2];
+    }
+    else if(splitter.size() == 1){
+        theCommand = splitter[0];
+        theRequest = "";
+        splitter.clear();
+    }
+    else {
+        return;
+    }
+    cout<<"theCommand:." << theCommand<<"."<<endl;
+    cout<<"theRequest:." << theRequest<<"."<<endl;
+    cout<<"theMessage:." << theMessage<<"."<<endl;
+
+    if(theCommand == "ID")
+        theRequest = serverID;
+
+    else if(theCommand == "CHANGEID") {
+        serverID = provide_unique_id();
+        theRequest = serverID;
+    }
+
+    else if(theCommand == "CONNECT" && theRequest != "") {
+        if(usersmap.count(theRequest) <= 0) {
+            pair<string, clientInfo> x;
+            x.first = theRequest;
+            x.second.sockfd = newSocketFD1;
+            x.second.clientAddress = clientAddress;
+
+            usersmap.insert(x);
+
             msgBuf = "";
 
         } else {
             result = "F";
         }
     }
-    else if(splitter[0] == "LEAVE") {
-        cout<<splitter[1]<<" wants to leave!!"<<endl;
+    else if(theCommand == "MSG" && theRequest != "" && theRequest != "--ALL" && theMessage != "") {
+        msgUser = theRequest;
+
+        if(usersmap.count(msgUser) <= 0) {
+            theRequest = "No user found";
+        }
+        else {
+            cout<< "Now sending message: "<< theMessage<< ", to user: "<< msgUser<<endl;
+            int cliSockfd = usersmap[msgUser].sockfd;
+            struct sockaddr_in cliAddr = usersmap[msgUser].clientAddress;
+            char * stringToChar = new char[theMessage.length()+1];
+            strcpy (stringToChar, theMessage.c_str());
+            sendto(cliSockfd, stringToChar, 200, 0, (struct sockaddr*)&cliAddr, sizeof cliAddr);
+        }
+
+
     }
-    char * stringToChar = new char[result.length()+1];
-    //cout<<"splitter[0]: "<< splitter[0]<< " splitter[1]: "<< splitter[1]<<endl;
-    strcpy (stringToChar, result.c_str());
+    else if(theCommand == "MSG" && theRequest == "--ALL" && theMessage != "") {
+        cout << "Now sending message: " << theMessage << ", to everyone"<<endl;
+        map<string, clientInfo>::iterator it;
+        for(it = usersmap.begin(); it != usersmap.end(); it++) {
+            int cliSockfd = it->second.sockfd;
+            struct sockaddr_in cliAddr = it->second.clientAddress;
+            char * stringToChar = new char[theMessage.length()+1];
+            strcpy (stringToChar, theMessage.c_str());
+            sendto(cliSockfd, stringToChar, 200, 0, (struct sockaddr*)&cliAddr, sizeof cliAddr);
+            memset(buffer, 0, sizeof(buffer));
+            stringToChar = NULL;
+            delete stringToChar;
+        }
+        return;
+    }
+    else if(theCommand == "LEAVE") {
+        cout<<theRequest<<": disconnecting.."<<endl;
+        usersmap.erase(theRequest);
+        return;
+    }
+    else if(theCommand == "WHO") {
+        map<string, clientInfo>::iterator it;
+        cout<< "-----listing all users-----"<<endl;
+        theRequest = "";
+
+        for(it = usersmap.begin(); it != usersmap.end(); it++) {
+            theRequest += it->first + ", ";
+        }
+        cout<<"users: "<< theRequest <<endl;
+
+    }
+    memset(buffer, 0, sizeof(buffer));
+    char * stringToChar = new char[theRequest.length()+1];
+    strcpy (stringToChar, theRequest.c_str());
     sendto(newSocketFD1, stringToChar, 200, 0, (struct sockaddr*)&clientAddress, sizeof clientAddress);
 }
+
 
 int main(int argc, char *argv[]) {
 
     map<string, Knock> knockMap;
+    map<string, clientInfo> usersmap;
     //if(strcmp(argv[1], "ID") == 0)
     //    cout << provide_unique_id() << endl;
 
@@ -259,6 +357,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in serverAddress3;
     struct sockaddr_in clientAddress;
 
+    serverID = provide_unique_id();
     socketFD1 = createSocket(socketFD1);
     socketFD2 = createSocket(socketFD2);
     socketFD3 = createSocket(socketFD3);
@@ -305,11 +404,10 @@ int main(int argc, char *argv[]) {
     bind(socketFD2, (struct sockaddr *) &serverAddress2, sizeof(serverAddress2));
     bind(socketFD3, (struct sockaddr *) &serverAddress3, sizeof(serverAddress3));*/
 
-    cout << "sets set" << endl;
+    cout << "Please knock before you enter.." << endl;
     if(listen(socketFD1, 5) < 0) {
         cout << "error is below" << endl;
         error("socket1");
-        cout << "nvm" << endl;
     }
     if(listen(socketFD2, 5) < 0) {
         error("socket2");
@@ -317,7 +415,6 @@ int main(int argc, char *argv[]) {
     if(listen(socketFD3, 5) < 0) {
         error("socket3");
     }
-    cout << "hello?" << endl;
 
     // Initialize the set of active sockets.
     //socketFD1 = createSocket(socketFD1);
@@ -327,13 +424,13 @@ int main(int argc, char *argv[]) {
     FD_SET (socketFD3, &activeFDSet);
 
     while(1) {
-        cout << "inside while loop" << endl;
+
         // Block untill input arrives on one or more of the active sockets
         readFDSet = activeFDSet;
         //selectFileDescritporSet(readFDSet);
         int selectValue = select(FD_SETSIZE, &readFDSet, NULL, NULL, NULL);
         if(selectValue < 0) error("Select");
-        cout<<"Done selecting :)"<<endl;
+
         for(int i = 0; i < FD_SETSIZE; i++) {
             // check if file descriptor is part of the set
             if(FD_ISSET(i, &readFDSet)) {
@@ -349,7 +446,7 @@ int main(int argc, char *argv[]) {
                         error("accept error");
                     }
 
-                    cout << "second output" <<endl;
+
                     fprintf (stderr,
                              "Server: connect from host %s, port %hd.\n",
                              inet_ntoa (clientAddress.sin_addr),
@@ -362,7 +459,7 @@ int main(int argc, char *argv[]) {
                    else
                        portConnectedTo = portNumber3;
 
-                   updateKnockMap(clientAddress, knockMap, portConnectedTo);
+                   /*updateKnockMap(clientAddress, knockMap, portConnectedTo);
                    Knock temp = knockMap[inet_ntoa(clientAddress.sin_addr)];
 
                    cout << "time for check" << endl;
@@ -371,21 +468,23 @@ int main(int argc, char *argv[]) {
                        FD_SET (newSocketFD1, &activeFDSet);
                    }
                    else {
-                       cout << "---INCORRECT KNOCK---" << endl;
+                       //cout << "---INCORRECT KNOCK---" << endl;
                        close (newSocketFD1);
                        //FD_CLR (i, &activeFDSet);
-                       cout << "done closeing1" << endl;
-                   }
+                       cout << "done closing" << endl;
+                   }*/
+                   FD_SET (newSocketFD1, &activeFDSet);
                 }
                 else {
 
-                    cout << "read message" << endl;
                     if (read_from_client (i) < 0) {
+
                         close (i);
                         FD_CLR (i, &activeFDSet);
                     }
 
-                    checkCommandAndReact(i, clientAddress);
+                    checkCommandAndReact(i, clientAddress, usersmap);
+                    cout << "done checking command and reacting" << endl;
                 }
             }
         }
